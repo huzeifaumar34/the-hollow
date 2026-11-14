@@ -76,6 +76,28 @@ void test_progress_restore() {
     assert(restored.deaths == 4.0f);
 }
 
+void test_box_activates_pressure_plate() {
+    hollow::GameCore game;
+    game.start();
+    game.debug_set_player(1660.0f, 376.0f, true);
+    game.set_input(false, true, false);
+    tick(game, 10, 0.033f);
+    const auto result = game.snapshot();
+    assert(result.crate_x > 1730.0f);
+    assert(result.crate_on_plate > 0.5f);
+    assert(result.switch_active > 0.5f);
+}
+
+void test_factory_spike_kills_player() {
+    hollow::GameCore game;
+    game.start();
+    game.debug_set_player(1490.0f, 336.0f, true);
+    tick(game, 1, 1.0f / 60.0f);
+    const auto result = game.snapshot();
+    assert(static_cast<int>(result.game_state) == 2);
+    assert(result.deaths == 1.0f);
+}
+
 } // namespace
 
 int main() {
@@ -85,6 +107,8 @@ int main() {
     test_fragment_collection();
     test_restart_from_checkpoint();
     test_progress_restore();
+    test_box_activates_pressure_plate();
+    test_factory_spike_kills_player();
     std::cout << "THE HOLLOW native core tests passed\n";
     return 0;
 }
