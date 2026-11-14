@@ -48,16 +48,22 @@ Java_com_hollow_game_NativeGameEngine_nativeRestart(
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_hollow_game_NativeGameEngine_nativeNextChapter(JNIEnv*, jobject, jlong handle) {
+    if (auto* game = from_handle(handle)) game->next_chapter();
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_hollow_game_NativeGameEngine_nativeRestoreProgress(
     JNIEnv*, jobject, jlong handle, jfloat checkpoint_x, jint collected_mask,
-    jboolean switch_active, jfloat crate_x, jint deaths) {
+    jboolean switch_active, jfloat crate_x, jint deaths, jint chapter_index) {
     if (auto* game = from_handle(handle)) {
         game->restore_progress(
             checkpoint_x,
             static_cast<int>(collected_mask),
             switch_active == JNI_TRUE,
             crate_x,
-            static_cast<int>(deaths)
+            static_cast<int>(deaths),
+            static_cast<int>(chapter_index)
         );
     }
 }
@@ -65,7 +71,7 @@ Java_com_hollow_game_NativeGameEngine_nativeRestoreProgress(
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_hollow_game_NativeGameEngine_nativeSnapshot(
     JNIEnv* env, jobject, jlong handle) {
-    jfloat values[15] = {};
+    jfloat values[16] = {};
     if (auto* game = from_handle(handle)) {
         const hollow::Snapshot s = game->snapshot();
         values[0] = s.player_x;
@@ -83,8 +89,9 @@ Java_com_hollow_game_NativeGameEngine_nativeSnapshot(
         values[12] = s.collected_mask;
         values[13] = s.crate_x;
         values[14] = s.crate_on_plate;
+        values[15] = s.chapter_index;
     }
-    jfloatArray result = env->NewFloatArray(15);
-    if (result != nullptr) env->SetFloatArrayRegion(result, 0, 15, values);
+    jfloatArray result = env->NewFloatArray(16);
+    if (result != nullptr) env->SetFloatArrayRegion(result, 0, 16, values);
     return result;
 }
