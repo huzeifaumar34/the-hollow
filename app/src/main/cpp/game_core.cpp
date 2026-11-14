@@ -95,6 +95,35 @@ void GameCore::next_chapter() {
     clear_input();
 }
 
+void GameCore::restore_progress(
+    float checkpoint_x,
+    int collected_mask,
+    bool switch_active,
+    float crate_x,
+    int deaths,
+    int chapter_index
+) {
+    chapter_index_ = std::clamp(chapter_index, 0, 4);
+    configure_chapter();
+    checkpoint_x_ = (checkpoint_x >= 1200.0f) ? 1270.0f : 90.0f;
+    crate_x_ = std::clamp(crate_x, 1720.0f, 2070.0f);
+    switch_active_ = switch_active;
+    deaths_ = std::max(0, deaths);
+
+    for (int i = 0; i < static_cast<int>(collected_.size()); ++i) {
+        collected_[static_cast<std::size_t>(i)] = (collected_mask & (1 << i)) != 0;
+    }
+
+    player_x_ = checkpoint_x_;
+    player_y_ = checkpoint_x_ > 1000.0f ? 336.0f : 365.0f;
+    velocity_x_ = 0.0f;
+    velocity_y_ = 0.0f;
+    grounded_ = false;
+    camera_x_ = std::clamp(player_x_ - 330.0f, 0.0f, 1900.0f);
+    enemy_x_ = std::max(1110.0f, checkpoint_x_ - 160.0f);
+    clear_input();
+}
+
 void GameCore::update(float delta_seconds) {
     if (state_ != GameState::Playing) return;
     const float dt = std::clamp(delta_seconds, 0.0f, 0.033f);
