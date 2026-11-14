@@ -109,7 +109,21 @@ void GameCore::update_physics(float dt) {
         }
     }
 
-    if (player_x_ > 1735.0f && player_x_ < 1835.0f && grounded_) {
+    // Push the crate while grounded. The plate is activated by the crate,
+    // not by the player walking across it.
+    constexpr float kCrateWidth = 42.0f;
+    if (!switch_active_ && grounded_ && velocity_x_ > 0.0f &&
+        old_player_x + kPlayerWidth <= crate_x_ + 2.0f &&
+        player_x_ + kPlayerWidth > crate_x_) {
+        const float push_distance = player_x_ + kPlayerWidth - crate_x_;
+        crate_x_ = std::min(crate_x_ + push_distance, 2070.0f);
+        player_x_ = crate_x_ - kPlayerWidth;
+    }
+
+    const bool crate_over_plate =
+        crate_x_ + kCrateWidth * 0.5f >= 1760.0f &&
+        crate_x_ + kCrateWidth * 0.5f <= 1815.0f;
+    if (crate_over_plate) {
         switch_active_ = true;
     }
 
