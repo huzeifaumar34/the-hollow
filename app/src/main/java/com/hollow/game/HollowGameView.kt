@@ -39,6 +39,9 @@ class HollowGameView(context: Context) : View(context) {
 
     private enum class GameState { MENU, PLAYING, DEAD, COMPLETE }
 
+    // Simulation and gameplay rules live in the C++ core through JNI.
+    private val engine = NativeGameEngine()
+
     private data class Platform(val left: Float, val top: Float, val right: Float)
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -121,100 +124,45 @@ class HollowGameView(context: Context) : View(context) {
 
     private fun updateWorld(dt: Float) {
         if (dt <= 0f) return
-
-        val oldBottom = playerY + PLAYER_H
-        velocityX = when {
-            leftPressed && !rightPressed -> -MOVE_SPEED
-            rightPressed && !leftPressed -> MOVE_SPEED
-            else -> 0f
-        }
-
-        if (jumpPressed && !jumpLatch && grounded) {
-            velocityY = JUMP_SPEED
-            grounded = false
-        }
-        jumpLatch = jumpPressed
-
-        playerX = (playerX + velocityX * dt).coerceAtLeast(0f)
-        playerY += velocityY * dt
-        velocityY += GRAVITY * dt
-        grounded = false
-
-        val newBottom = playerY + PLAYER_H
-        if (velocityY >= 0f) {
-            for (platform in platforms) {
-                val overlaps = playerX + PLAYER_W > platform.left && playerX < platform.right
-                if (overlaps && oldBottom <= platform.top + 8f && newBottom >= platform.top) {
-                    playerY = platform.top - PLAYER_H
-                    velocityY = 0f
-                    grounded = true
-                    break
-                }
-            }
-        }
-
-        // The pressure plate stays active once stepped on, opening the gate.
-        if (playerX > 1735f && playerX < 1835f && grounded) {
-            switchActivated = true
-        }
-
-        // The closed gate blocks progress until the pressure plate is reached.
-        val gateX = 2115f
-        if (!switchActivated && playerX + PLAYER_W > gateX && playerX < gateX + 42f) {
-            playerX = gateX - PLAYER_W
-            velocityX = 0f
-        }
-
-        // The shadow begins to move when the player enters the deeper ruins.
-        if (playerX > 1180f) {
-            enemyX += 205f * dt
-            if (playerX - enemyX < 46f) {
-                die()
-            }
-        }
-
-        for (hazardX in hazards) {
-            val overlaps = playerX + PLAYER_W > hazardX && playerX < hazardX + 46f
-            if (overlaps && playerY + PLAYER_H > 390f && playerY < 450f) {
-                die()
-            }
-        }
-
-        for (i in shardPositions.indices) {
-            if (!collectedShards.contains(i) && abs((playerX + PLAYER_W / 2f) - shardPositions[i]) < 38f &&
-                abs((playerY + PLAYER_H / 2f) - 365f) < 100f
-            ) {
-                collectedShards.add(i)
-            }
-        }
-
-        if (playerX > 1220f && checkpointX < 1200f) {
-            checkpointX = 1270f
-        }
-
-        if (playerY > 650f) die()
-        if (playerX > 2680f) state = GameState.COMPLETE
-
-        cameraX = (playerX - 330f).coerceIn(0f, 1900f)
+        engine.setInput(leftPressed, rightPressed, jumpPressed)
+        engine.update(dt)
+        syncNativeSnapshot()
     }
 
-    private fun die() {
-        if (state != GameState.PLAYING) return
-        state = GameState.DEAD
-        deaths++
+    private fun syncNativeSnapshot() {
+        val snapshot = engine.snapshot()
+        if (snapshot.size < 13) return
+
+        playerX = snapshot[0]
+        playerY = snapshot[1]
+        velocityX = snapshot[2]
+        velocityY = snapshot[3]
+        grounded = snapshot[4] > 0.5f
+        cameraX = snapshot[5]
+        enemyX = snapshot[6]
+        switchActivated = snapshot[7] > 0.5f
+        checkpointX = snapshot[10]
+        deaths = snapshot[11].toInt()
+
+        val mask = snapshot[12].toInt()
+        collectedShards.clear()
+        for (i in 0 until 3) {
+            if ((mask and (1 shl i)) != 0) collectedShards.add(i)
+        }
+
+        state = when (snapshot[9].toInt()) {
+            1 -> GameState.PLAYING
+            2 -> GameState.DEAD
+            3 -> GameState.COMPLETE
+            else -> GameState.MENU
+        }
+    }
+
+    private fun resetGame(fromComplete: Boolean = false) {
+        engine.restart(fromComplete)
         clearControls()
-    }
-
-    private fun resetGame() {
-        playerX = checkpointX
-        playerY = if (checkpointX > 1000f) 335f else 365f
-        velocityX = 0f
-        velocityY = 0f
-        grounded = false
-        enemyX = max(1110f, checkpointX - 160f)
-        cameraX = (playerX - 330f).coerceAtLeast(0f)
+        syncNativeSnapshot()
         state = GameState.PLAYING
-        clearControls()
     }
 
     private fun clearControls() {
@@ -223,6 +171,7 @@ class HollowGameView(context: Context) : View(context) {
         rightPressed = false
         jumpPressed = false
         jumpLatch = false
+        engine.setInput(false, false, false)
     }
 
     private fun drawBackground(canvas: Canvas) {
@@ -503,11 +452,20 @@ class HollowGameView(context: Context) : View(context) {
         leftPressed = pointers.values.contains(CONTROL_LEFT)
         rightPressed = pointers.values.contains(CONTROL_RIGHT)
         jumpPressed = pointers.values.contains(CONTROL_JUMP)
+        engine.setInput(leftPressed, rightPressed, jumpPressed)
+    }
+
+    override fun onDetachedFromWindow() {
+        clearControls()
+        engine.close()
+        super.onDetachedFromWindow()
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val action = event.actionMasked
         if (state == GameState.MENU && action == MotionEvent.ACTION_DOWN) {
+            engine.start()
+            syncNativeSnapshot()
             state = GameState.PLAYING
             lastFrameNanos = 0L
             return true
@@ -515,13 +473,8 @@ class HollowGameView(context: Context) : View(context) {
         if ((state == GameState.DEAD || state == GameState.COMPLETE) &&
             action == MotionEvent.ACTION_DOWN
         ) {
-            if (state == GameState.COMPLETE) {
-                checkpointX = 90f
-                collectedShards.clear()
-                switchActivated = false
-                enemyX = 1110f
-            }
-            resetGame()
+            resetGame(fromComplete = state == GameState.COMPLETE)
+            lastFrameNanos = 0L
             return true
         }
 
