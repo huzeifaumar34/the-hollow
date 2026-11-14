@@ -47,6 +47,21 @@ Java_com_hollow_game_NativeGameEngine_nativeRestart(
     }
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_hollow_game_NativeGameEngine_nativeRestoreProgress(
+    JNIEnv*, jobject, jlong handle, jfloat checkpoint_x, jint collected_mask,
+    jboolean switch_active, jfloat crate_x, jint deaths) {
+    if (auto* game = from_handle(handle)) {
+        game->restore_progress(
+            checkpoint_x,
+            static_cast<int>(collected_mask),
+            switch_active == JNI_TRUE,
+            crate_x,
+            static_cast<int>(deaths)
+        );
+    }
+}
+
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_hollow_game_NativeGameEngine_nativeSnapshot(
     JNIEnv* env, jobject, jlong handle) {
