@@ -24,6 +24,14 @@ class NativeGameEngine {
     )
     private external fun nativeUpdate(handle: Long, deltaSeconds: Float)
     private external fun nativeRestart(handle: Long, fromComplete: Boolean)
+    private external fun nativeRestoreProgress(
+        handle: Long,
+        checkpointX: Float,
+        collectedMask: Int,
+        switchActive: Boolean,
+        crateX: Float,
+        deaths: Int
+    )
     private external fun nativeSnapshot(handle: Long): FloatArray
 
     fun start() {
@@ -40,6 +48,20 @@ class NativeGameEngine {
 
     fun restart(fromComplete: Boolean) {
         if (handle != 0L) nativeRestart(handle, fromComplete)
+    }
+
+    fun restoreProgress(
+        checkpointX: Float,
+        collectedMask: Int,
+        switchActive: Boolean,
+        crateX: Float,
+        deaths: Int
+    ) {
+        if (handle != 0L) {
+            nativeRestoreProgress(
+                handle, checkpointX, collectedMask, switchActive, crateX, deaths
+            )
+        }
     }
 
     fun snapshot(): FloatArray {
