@@ -1,0 +1,552 @@
+package com.hollow.game
+
+import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
+import android.graphics.Shader
+import android.view.MotionEvent
+import android.view.View
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sin
+
+/**
+ * First playable prototype of THE HOLLOW.
+ *
+ * Everything is drawn with Android Canvas so the prototype has no external
+ * asset or native-library dependency. World coordinates use a virtual
+ * 960x540 landscape canvas and are scaled to the device.
+ */
+class HollowGameView(context: Context) : View(context) {
+    private companion object {
+        const val VIEW_W = 960f
+        const val VIEW_H = 540f
+        const val PLAYER_W = 28f
+        const val PLAYER_H = 54f
+        const val GRAVITY = 1500f
+        const val MOVE_SPEED = 255f
+        const val JUMP_SPEED = -610f
+
+        const val CONTROL_LEFT = 1
+        const val CONTROL_RIGHT = 2
+        const val CONTROL_JUMP = 3
+    }
+
+    private enum class GameState { MENU, PLAYING, DEAD, COMPLETE }
+
+    private data class Platform(val left: Float, val top: Float, val right: Float)
+
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textAlign = Paint.Align.CENTER
+        typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
+    }
+    private val platforms = listOf(
+        Platform(0f, 430f, 690f),
+        Platform(770f, 430f, 1160f),
+        Platform(1245f, 390f, 1585f),
+        Platform(1660f, 430f, 2180f),
+        Platform(2260f, 430f, 2820f)
+    )
+    private val hazards = floatArrayOf(900f, 1040f, 1500f, 2385f)
+    private val shardPositions = floatArrayOf(555f, 1370f, 1905f)
+    private val collectedShards = HashSet<Int>()
+    private val pointers = HashMap<Int, Int>()
+
+    private var state = GameState.MENU
+    private var playerX = 90f
+    private var playerY = 365f
+    private var velocityX = 0f
+    private var velocityY = 0f
+    private var grounded = false
+    private var leftPressed = false
+    private var rightPressed = false
+    private var jumpPressed = false
+    private var jumpLatch = false
+    private var cameraX = 0f
+    private var enemyX = 1110f
+    private var switchActivated = false
+    private var checkpointX = 90f
+    private var elapsed = 0f
+    private var lastFrameNanos = 0L
+    private var deaths = 0
+    private var screenScaleX = 1f
+    private var screenScaleY = 1f
+
+    init {
+        isFocusable = true
+        isClickable = true
+        setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        if (width <= 0 || height <= 0) return
+
+        screenScaleX = width / VIEW_W
+        screenScaleY = height / VIEW_H
+
+        val now = System.nanoTime()
+        val delta = if (lastFrameNanos == 0L) 0f
+            else ((now - lastFrameNanos) / 1_000_000_000f).coerceIn(0f, 0.033f)
+        lastFrameNanos = now
+        elapsed += delta
+
+        if (state == GameState.PLAYING) updateWorld(delta)
+
+        canvas.save()
+        canvas.scale(screenScaleX, screenScaleY)
+        drawBackground(canvas)
+
+        canvas.save()
+        canvas.translate(-cameraX, 0f)
+        drawWorld(canvas)
+        canvas.restore()
+
+        when (state) {
+            GameState.MENU -> drawMenu(canvas)
+            GameState.PLAYING -> drawHudAndControls(canvas)
+            GameState.DEAD -> drawEndOverlay(canvas, "A ESCURIDÃO ALCANÇOU-TE", "TOCA PARA TENTAR NOVAMENTE")
+            GameState.COMPLETE -> drawEndOverlay(canvas, "O PRIMEIRO LIMIAR", "TOCA PARA JOGAR NOVAMENTE")
+        }
+        canvas.restore()
+        postInvalidateOnAnimation()
+    }
+
+    private fun updateWorld(dt: Float) {
+        if (dt <= 0f) return
+
+        val oldBottom = playerY + PLAYER_H
+        velocityX = when {
+            leftPressed && !rightPressed -> -MOVE_SPEED
+            rightPressed && !leftPressed -> MOVE_SPEED
+            else -> 0f
+        }
+
+        if (jumpPressed && !jumpLatch && grounded) {
+            velocityY = JUMP_SPEED
+            grounded = false
+        }
+        jumpLatch = jumpPressed
+
+        playerX = (playerX + velocityX * dt).coerceAtLeast(0f)
+        playerY += velocityY * dt
+        velocityY += GRAVITY * dt
+        grounded = false
+
+        val newBottom = playerY + PLAYER_H
+        if (velocityY >= 0f) {
+            for (platform in platforms) {
+                val overlaps = playerX + PLAYER_W > platform.left && playerX < platform.right
+                if (overlaps && oldBottom <= platform.top + 8f && newBottom >= platform.top) {
+                    playerY = platform.top - PLAYER_H
+                    velocityY = 0f
+                    grounded = true
+                    break
+                }
+            }
+        }
+
+        // The pressure plate stays active once stepped on, opening the gate.
+        if (playerX > 1735f && playerX < 1835f && grounded) {
+            switchActivated = true
+        }
+
+        // The closed gate blocks progress until the pressure plate is reached.
+        val gateX = 2115f
+        if (!switchActivated && playerX + PLAYER_W > gateX && playerX < gateX + 42f) {
+            playerX = gateX - PLAYER_W
+            velocityX = 0f
+        }
+
+        // The shadow begins to move when the player enters the deeper ruins.
+        if (playerX > 1180f) {
+            enemyX += 205f * dt
+            if (playerX - enemyX < 46f) {
+                die()
+            }
+        }
+
+        for (hazardX in hazards) {
+            val overlaps = playerX + PLAYER_W > hazardX && playerX < hazardX + 46f
+            if (overlaps && playerY + PLAYER_H > 390f && playerY < 450f) {
+                die()
+            }
+        }
+
+        for (i in shardPositions.indices) {
+            if (!collectedShards.contains(i) && abs((playerX + PLAYER_W / 2f) - shardPositions[i]) < 38f &&
+                abs((playerY + PLAYER_H / 2f) - 365f) < 100f
+            ) {
+                collectedShards.add(i)
+            }
+        }
+
+        if (playerX > 1220f && checkpointX < 1200f) {
+            checkpointX = 1270f
+        }
+
+        if (playerY > 650f) die()
+        if (playerX > 2680f) state = GameState.COMPLETE
+
+        cameraX = (playerX - 330f).coerceIn(0f, 1900f)
+    }
+
+    private fun die() {
+        if (state != GameState.PLAYING) return
+        state = GameState.DEAD
+        deaths++
+        clearControls()
+    }
+
+    private fun resetGame() {
+        playerX = checkpointX
+        playerY = if (checkpointX > 1000f) 335f else 365f
+        velocityX = 0f
+        velocityY = 0f
+        grounded = false
+        enemyX = max(1110f, checkpointX - 160f)
+        cameraX = (playerX - 330f).coerceAtLeast(0f)
+        state = GameState.PLAYING
+        clearControls()
+    }
+
+    private fun clearControls() {
+        pointers.clear()
+        leftPressed = false
+        rightPressed = false
+        jumpPressed = false
+        jumpLatch = false
+    }
+
+    private fun drawBackground(canvas: Canvas) {
+        paint.shader = LinearGradient(
+            0f, 0f, 0f, VIEW_H,
+            Color.rgb(31, 34, 39),
+            Color.rgb(5, 6, 8),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawRect(0f, 0f, VIEW_W, VIEW_H, paint)
+        paint.shader = null
+
+        // A pale, distant moon and sparse stars establish the monochrome mood.
+        paint.color = Color.rgb(174, 178, 181)
+        canvas.drawCircle(760f, 112f, 35f, paint)
+        paint.color = Color.rgb(31, 34, 38)
+        canvas.drawCircle(775f, 101f, 33f, paint)
+
+        paint.color = Color.rgb(155, 160, 165)
+        val stars = arrayOf(
+            90f to 78f, 180f to 130f, 300f to 56f, 420f to 112f,
+            540f to 65f, 650f to 155f, 850f to 70f, 925f to 190f
+        )
+        for ((x, y) in stars) canvas.drawCircle(x, y, 1.5f, paint)
+
+        val farHill = Path().apply {
+            moveTo(0f, 350f)
+            lineTo(115f, 270f)
+            lineTo(235f, 338f)
+            lineTo(390f, 250f)
+            lineTo(545f, 345f)
+            lineTo(700f, 260f)
+            lineTo(860f, 335f)
+            lineTo(960f, 285f)
+            lineTo(960f, 540f)
+            lineTo(0f, 540f)
+            close()
+        }
+        paint.color = Color.rgb(20, 22, 25)
+        canvas.drawPath(farHill, paint)
+
+        val nearHill = Path().apply {
+            moveTo(0f, 410f)
+            lineTo(150f, 350f)
+            lineTo(295f, 418f)
+            lineTo(470f, 340f)
+            lineTo(640f, 420f)
+            lineTo(815f, 355f)
+            lineTo(960f, 420f)
+            lineTo(960f, 540f)
+            lineTo(0f, 540f)
+            close()
+        }
+        paint.color = Color.rgb(12, 14, 17)
+        canvas.drawPath(nearHill, paint)
+
+        paint.color = Color.argb(18, 220, 225, 230)
+        for (i in 0..5) {
+            val y = 330f + i * 30f
+            canvas.drawRect(0f, y, VIEW_W, y + 18f, paint)
+        }
+    }
+
+    private fun drawWorld(canvas: Canvas) {
+        // Platforms and the black void beneath them.
+        paint.color = Color.rgb(5, 6, 7)
+        canvas.drawRect(0f, 430f, 2820f, VIEW_H + 700f, paint)
+
+        for (platform in platforms) {
+            paint.color = Color.rgb(13, 15, 18)
+            canvas.drawRect(platform.left, platform.top, platform.right, 560f, paint)
+            paint.color = Color.rgb(86, 91, 96)
+            paint.strokeWidth = 2f
+            canvas.drawLine(platform.left, platform.top, platform.right, platform.top, paint)
+            paint.color = Color.rgb(27, 30, 34)
+            for (x in platform.left.toInt()..platform.right.toInt() step 42) {
+                canvas.drawLine(x.toFloat(), platform.top + 9f, x.toFloat() + 18f, platform.top + 9f, paint)
+            }
+        }
+
+        drawDeadTrees(canvas)
+        drawHazards(canvas)
+        drawShards(canvas)
+        drawPressurePlate(canvas)
+        drawGate(canvas)
+        drawShadow(canvas)
+        drawPlayer(canvas)
+    }
+
+    private fun drawDeadTrees(canvas: Canvas) {
+        val treePositions = floatArrayOf(150f, 360f, 610f, 820f, 1120f, 1430f, 1780f, 2040f, 2460f, 2620f)
+        for (i in treePositions.indices) {
+            val x = treePositions[i]
+            val baseY = if (x > 1200f && x < 1600f) 390f else 430f
+            paint.color = Color.rgb(8, 9, 11)
+            paint.strokeWidth = 7f
+            canvas.drawLine(x, baseY, x - 10f, baseY - 105f, paint)
+            canvas.drawLine(x - 7f, baseY - 68f, x - 58f, baseY - 112f, paint)
+            canvas.drawLine(x - 4f, baseY - 86f, x + 42f, baseY - 138f, paint)
+            canvas.drawLine(x - 8f, baseY - 54f, x + 38f, baseY - 78f, paint)
+        }
+    }
+
+    private fun drawHazards(canvas: Canvas) {
+        for (x in hazards) {
+            val path = Path().apply {
+                moveTo(x, 430f)
+                lineTo(x + 20f, 390f)
+                lineTo(x + 43f, 430f)
+                close()
+            }
+            paint.color = Color.rgb(2, 2, 3)
+            canvas.drawPath(path, paint)
+            paint.color = Color.rgb(90, 94, 98)
+            paint.strokeWidth = 1.5f
+            canvas.drawLine(x + 20f, 391f, x + 30f, 413f, paint)
+        }
+    }
+
+    private fun drawShards(canvas: Canvas) {
+        for (i in shardPositions.indices) {
+            if (collectedShards.contains(i)) continue
+            val x = shardPositions[i]
+            val pulse = 1f + sin(elapsed * 3f + i) * 0.12f
+            canvas.save()
+            canvas.translate(x, 350f)
+            canvas.scale(pulse, pulse)
+            val shard = Path().apply {
+                moveTo(0f, -16f)
+                lineTo(11f, 0f)
+                lineTo(0f, 18f)
+                lineTo(-11f, 0f)
+                close()
+            }
+            paint.color = Color.rgb(205, 208, 211)
+            canvas.drawPath(shard, paint)
+            paint.color = Color.argb(90, 255, 255, 255)
+            canvas.drawCircle(-2f, -2f, 3f, paint)
+            canvas.restore()
+        }
+    }
+
+    private fun drawPressurePlate(canvas: Canvas) {
+        paint.color = if (switchActivated) Color.rgb(190, 194, 197) else Color.rgb(45, 49, 54)
+        canvas.drawRoundRect(RectF(1760f, 423f, 1815f, 430f), 2f, 2f, paint)
+        paint.color = Color.argb(70, 225, 230, 235)
+        canvas.drawRect(1770f, 409f, 1805f, 423f, paint)
+    }
+
+    private fun drawGate(canvas: Canvas) {
+        if (switchActivated) {
+            paint.color = Color.argb(90, 170, 176, 182)
+            canvas.drawRect(2115f, 350f, 2158f, 430f, paint)
+            return
+        }
+        paint.color = Color.rgb(3, 4, 5)
+        canvas.drawRect(2115f, 300f, 2158f, 430f, paint)
+        paint.color = Color.rgb(100, 105, 111)
+        paint.strokeWidth = 4f
+        canvas.drawLine(2120f, 303f, 2120f, 429f, paint)
+        canvas.drawLine(2152f, 303f, 2152f, 429f, paint)
+        paint.strokeWidth = 2f
+        for (y in 315..420 step 22) {
+            canvas.drawLine(2118f, y.toFloat(), 2155f, y.toFloat(), paint)
+        }
+    }
+
+    private fun drawShadow(canvas: Canvas) {
+        val bob = sin(elapsed * 4f) * 4f
+        paint.color = Color.rgb(1, 1, 2)
+        canvas.drawOval(RectF(enemyX - 23f, 360f + bob, enemyX + 25f, 432f + bob), paint)
+        canvas.drawCircle(enemyX, 350f + bob, 19f, paint)
+        paint.color = Color.rgb(120, 124, 128)
+        canvas.drawCircle(enemyX - 7f, 348f + bob, 2.5f, paint)
+        canvas.drawCircle(enemyX + 7f, 348f + bob, 2.5f, paint)
+        paint.color = Color.rgb(2, 2, 3)
+        canvas.drawRect(enemyX - 29f, 402f + bob, enemyX - 18f, 438f + bob, paint)
+        canvas.drawRect(enemyX + 17f, 402f + bob, enemyX + 29f, 438f + bob, paint)
+    }
+
+    private fun drawPlayer(canvas: Canvas) {
+        val run = if (abs(velocityX) > 1f && grounded) sin(elapsed * 15f) * 5f else 0f
+        val centerX = playerX + PLAYER_W / 2f
+        val headY = playerY + 11f
+        paint.color = Color.rgb(1, 2, 3)
+        canvas.drawOval(RectF(playerX + 1f, playerY + 8f, playerX + PLAYER_W - 1f, playerY + PLAYER_H), paint)
+        canvas.drawCircle(centerX, headY, 11f, paint)
+        paint.color = Color.rgb(175, 180, 185)
+        canvas.drawCircle(centerX + 4f, headY - 1f, 1.8f, paint)
+        paint.color = Color.rgb(2, 3, 4)
+        canvas.drawLine(centerX - 5f, playerY + 39f, centerX - 8f - run, playerY + 53f, paint)
+        canvas.drawLine(centerX + 5f, playerY + 39f, centerX + 9f + run, playerY + 53f, paint)
+    }
+
+    private fun drawHudAndControls(canvas: Canvas) {
+        textPaint.textAlign = Paint.Align.LEFT
+        textPaint.textSize = 17f
+        textPaint.color = Color.argb(210, 235, 238, 240)
+        canvas.drawText("THE HOLLOW", 28f, 36f, textPaint)
+        textPaint.textSize = 13f
+        textPaint.color = Color.rgb(160, 166, 171)
+        canvas.drawText("FRAGMENTOS: " + collectedShards.size + " / 3", 29f, 58f, textPaint)
+        if (!switchActivated) {
+            textPaint.textAlign = Paint.Align.RIGHT
+            canvas.drawText("ENCONTRA O MECANISMO", 930f, 38f, textPaint)
+        } else {
+            textPaint.textAlign = Paint.Align.RIGHT
+            canvas.drawText("O PORTÃO ABRIU", 930f, 38f, textPaint)
+        }
+
+        drawControl(canvas, 82f, 465f, "◀", leftPressed)
+        drawControl(canvas, 190f, 465f, "▶", rightPressed)
+        drawControl(canvas, 865f, 465f, "▲", jumpPressed)
+        textPaint.textAlign = Paint.Align.CENTER
+        textPaint.textSize = 11f
+        textPaint.color = Color.argb(140, 225, 228, 230)
+        canvas.drawText("MOVER", 136f, 525f, textPaint)
+        canvas.drawText("SALTAR", 865f, 525f, textPaint)
+    }
+
+    private fun drawControl(canvas: Canvas, x: Float, y: Float, symbol: String, active: Boolean) {
+        paint.color = if (active) Color.argb(110, 220, 225, 230) else Color.argb(48, 220, 225, 230)
+        canvas.drawCircle(x, y, 38f, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.5f
+        paint.color = Color.argb(125, 220, 225, 230)
+        canvas.drawCircle(x, y, 38f, paint)
+        paint.style = Paint.Style.FILL
+        textPaint.textAlign = Paint.Align.CENTER
+        textPaint.textSize = 29f
+        textPaint.color = Color.rgb(235, 238, 240)
+        canvas.drawText(symbol, x, y + 10f, textPaint)
+    }
+
+    private fun drawMenu(canvas: Canvas) {
+        paint.color = Color.argb(125, 0, 0, 0)
+        canvas.drawRect(0f, 0f, VIEW_W, VIEW_H, paint)
+        textPaint.textAlign = Paint.Align.CENTER
+        textPaint.color = Color.rgb(232, 235, 238)
+        textPaint.textSize = 58f
+        canvas.drawText("THE HOLLOW", 480f, 205f, textPaint)
+        textPaint.textSize = 16f
+        textPaint.color = Color.rgb(166, 171, 176)
+        canvas.drawText("NÃO SIGAS A LUZ. ESCUTA O SILÊNCIO.", 480f, 246f, textPaint)
+        textPaint.textSize = 19f
+        textPaint.color = Color.WHITE
+        canvas.drawText("TOCA PARA COMEÇAR", 480f, 350f, textPaint)
+        textPaint.textSize = 12f
+        textPaint.color = Color.rgb(145, 150, 155)
+        canvas.drawText("UM JOGO DE EXPLORAÇÃO E SOBREVIVÊNCIA", 480f, 390f, textPaint)
+    }
+
+    private fun drawEndOverlay(canvas: Canvas, title: String, subtitle: String) {
+        paint.color = Color.argb(190, 0, 0, 0)
+        canvas.drawRect(0f, 0f, VIEW_W, VIEW_H, paint)
+        textPaint.textAlign = Paint.Align.CENTER
+        textPaint.textSize = 30f
+        textPaint.color = Color.rgb(230, 233, 235)
+        canvas.drawText(title, 480f, 225f, textPaint)
+        textPaint.textSize = 17f
+        textPaint.color = Color.rgb(180, 185, 190)
+        canvas.drawText(subtitle, 480f, 285f, textPaint)
+        textPaint.textSize = 12f
+        canvas.drawText("FRAGMENTOS: " + collectedShards.size + " / 3    •    QUEDAS: " + deaths, 480f, 325f, textPaint)
+    }
+
+    private fun controlAt(x: Float, y: Float): Int {
+        if (y < 385f) return 0
+        return when {
+            x < 135f -> CONTROL_LEFT
+            x < 270f -> CONTROL_RIGHT
+            x > 720f -> CONTROL_JUMP
+            else -> 0
+        }
+    }
+
+    private fun refreshControls() {
+        leftPressed = pointers.values.contains(CONTROL_LEFT)
+        rightPressed = pointers.values.contains(CONTROL_RIGHT)
+        jumpPressed = pointers.values.contains(CONTROL_JUMP)
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        val action = event.actionMasked
+        if (state == GameState.MENU && action == MotionEvent.ACTION_DOWN) {
+            state = GameState.PLAYING
+            lastFrameNanos = 0L
+            return true
+        }
+        if ((state == GameState.DEAD || state == GameState.COMPLETE) &&
+            action == MotionEvent.ACTION_DOWN
+        ) {
+            if (state == GameState.COMPLETE) {
+                checkpointX = 90f
+                collectedShards.clear()
+                switchActivated = false
+                enemyX = 1110f
+            }
+            resetGame()
+            return true
+        }
+
+        when (action) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                val index = event.actionIndex
+                val x = event.getX(index) / screenScaleX
+                val y = event.getY(index) / screenScaleY
+                pointers[event.getPointerId(index)] = controlAt(x, y)
+                refreshControls()
+            }
+            MotionEvent.ACTION_MOVE -> {
+                for (index in 0 until event.pointerCount) {
+                    val x = event.getX(index) / screenScaleX
+                    val y = event.getY(index) / screenScaleY
+                    pointers[event.getPointerId(index)] = controlAt(x, y)
+                }
+                refreshControls()
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                pointers.remove(event.getPointerId(event.actionIndex))
+                refreshControls()
+            }
+            MotionEvent.ACTION_CANCEL -> clearControls()
+        }
+        return true
+    }
+}
