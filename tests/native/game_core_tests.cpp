@@ -64,6 +64,18 @@ void test_restart_from_checkpoint() {
     assert(std::abs(result.player_x - 90.0f) < 0.01f);
 }
 
+void test_progress_restore() {
+    hollow::GameCore game;
+    game.restore_progress(1270.0f, 5, true, 1780.0f, 4);
+    const auto restored = game.snapshot();
+    assert(std::abs(restored.checkpoint_x - 1270.0f) < 0.01f);
+    assert(std::abs(restored.player_x - 1270.0f) < 0.01f);
+    assert(restored.collected_count == 2.0f);
+    assert(restored.switch_active > 0.5f);
+    assert(std::abs(restored.crate_x - 1780.0f) < 0.01f);
+    assert(restored.deaths == 4.0f);
+}
+
 } // namespace
 
 int main() {
@@ -72,6 +84,7 @@ int main() {
     test_horizontal_movement();
     test_fragment_collection();
     test_restart_from_checkpoint();
+    test_progress_restore();
     std::cout << "THE HOLLOW native core tests passed\n";
     return 0;
 }
