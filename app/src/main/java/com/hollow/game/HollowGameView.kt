@@ -74,6 +74,8 @@ class HollowGameView(context: Context) : View(context) {
     private var jumpLatch = false
     private var cameraX = 0f
     private var enemyX = 1110f
+    private var crateX = 1720f
+    private var crateOnPlate = false
     private var switchActivated = false
     private var checkpointX = 90f
     private var elapsed = 0f
@@ -131,7 +133,7 @@ class HollowGameView(context: Context) : View(context) {
 
     private fun syncNativeSnapshot() {
         val snapshot = engine.snapshot()
-        if (snapshot.size < 13) return
+        if (snapshot.size < 15) return
 
         playerX = snapshot[0]
         playerY = snapshot[1]
@@ -143,6 +145,8 @@ class HollowGameView(context: Context) : View(context) {
         switchActivated = snapshot[7] > 0.5f
         checkpointX = snapshot[10]
         deaths = snapshot[11].toInt()
+        crateX = snapshot[13]
+        crateOnPlate = snapshot[14] > 0.5f
 
         val mask = snapshot[12].toInt()
         collectedShards.clear()
@@ -256,6 +260,7 @@ class HollowGameView(context: Context) : View(context) {
         drawHazards(canvas)
         drawShards(canvas)
         drawPressurePlate(canvas)
+        drawCrate(canvas)
         drawGate(canvas)
         drawShadow(canvas)
         drawPlayer(canvas)
@@ -277,17 +282,19 @@ class HollowGameView(context: Context) : View(context) {
 
     private fun drawHazards(canvas: Canvas) {
         for (x in hazards) {
+            val baseY = if (x == 1500f) 390f else 430f
+            val tipY = baseY - 40f
             val path = Path().apply {
-                moveTo(x, 430f)
-                lineTo(x + 20f, 390f)
-                lineTo(x + 43f, 430f)
+                moveTo(x, baseY)
+                lineTo(x + 20f, tipY)
+                lineTo(x + 43f, baseY)
                 close()
             }
             paint.color = Color.rgb(2, 2, 3)
             canvas.drawPath(path, paint)
             paint.color = Color.rgb(90, 94, 98)
             paint.strokeWidth = 1.5f
-            canvas.drawLine(x + 20f, 391f, x + 30f, 413f, paint)
+            canvas.drawLine(x + 20f, tipY + 1f, x + 30f, tipY + 23f, paint)
         }
     }
 
@@ -319,6 +326,19 @@ class HollowGameView(context: Context) : View(context) {
         canvas.drawRoundRect(RectF(1760f, 423f, 1815f, 430f), 2f, 2f, paint)
         paint.color = Color.argb(70, 225, 230, 235)
         canvas.drawRect(1770f, 409f, 1805f, 423f, paint)
+    }
+
+    private fun drawCrate(canvas: Canvas) {
+        // Heavy wooden crate with pale metal corners; its position comes from C++.
+        paint.color = Color.rgb(8, 9, 11)
+        canvas.drawRoundRect(RectF(crateX, 391f, crateX + 42f, 430f), 2f, 2f, paint)
+        paint.color = if (crateOnPlate) Color.rgb(150, 155, 160) else Color.rgb(76, 81, 86)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f
+        canvas.drawRect(crateX + 4f, 395f, crateX + 38f, 426f, paint)
+        canvas.drawLine(crateX + 5f, 397f, crateX + 37f, 424f, paint)
+        canvas.drawLine(crateX + 37f, 397f, crateX + 5f, 424f, paint)
+        paint.style = Paint.Style.FILL
     }
 
     private fun drawGate(canvas: Canvas) {
@@ -376,7 +396,7 @@ class HollowGameView(context: Context) : View(context) {
         canvas.drawText("FRAGMENTOS: " + collectedShards.size + " / 3", 29f, 58f, textPaint)
         if (!switchActivated) {
             textPaint.textAlign = Paint.Align.RIGHT
-            canvas.drawText("ENCONTRA O MECANISMO", 930f, 38f, textPaint)
+            canvas.drawText("EMPURRA A CAIXA ATÉ À PLACA", 930f, 38f, textPaint)
         } else {
             textPaint.textAlign = Paint.Align.RIGHT
             canvas.drawText("O PORTÃO ABRIU", 930f, 38f, textPaint)
