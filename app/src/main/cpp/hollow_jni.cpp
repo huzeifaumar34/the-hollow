@@ -50,7 +50,7 @@ Java_com_hollow_game_NativeGameEngine_nativeRestart(
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_hollow_game_NativeGameEngine_nativeSnapshot(
     JNIEnv* env, jobject, jlong handle) {
-    jfloat values[13] = {};
+    jfloat values[15] = {};
     if (auto* game = from_handle(handle)) {
         const hollow::Snapshot s = game->snapshot();
         values[0] = s.player_x;
@@ -66,8 +66,10 @@ Java_com_hollow_game_NativeGameEngine_nativeSnapshot(
         values[10] = s.checkpoint_x;
         values[11] = s.deaths;
         values[12] = s.collected_mask;
+        values[13] = s.crate_x;
+        values[14] = s.crate_on_plate;
     }
-    jfloatArray result = env->NewFloatArray(13);
-    if (result != nullptr) env->SetFloatArrayRegion(result, 0, 13, values);
+    jfloatArray result = env->NewFloatArray(15);
+    if (result != nullptr) env->SetFloatArrayRegion(result, 0, 15, values);
     return result;
 }
