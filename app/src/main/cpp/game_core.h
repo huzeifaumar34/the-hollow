@@ -45,6 +45,7 @@ public:
     void set_input(bool left, bool right, bool jump);
     void update(float delta_seconds);
     void restart(bool from_complete);
+    void restore_progress(float checkpoint_x, int collected_mask, bool switch_active, float crate_x, int deaths);
     Snapshot snapshot() const;
 
 private:
