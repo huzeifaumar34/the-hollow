@@ -48,6 +48,10 @@ public:
     void restore_progress(float checkpoint_x, int collected_mask, bool switch_active, float crate_x, int deaths);
     Snapshot snapshot() const;
 
+#ifdef HOLLOW_TESTING
+    void debug_set_player(float x, float y, bool grounded);
+#endif
+
 private:
     static constexpr float kPlayerWidth = 28.0f;
     static constexpr float kPlayerHeight = 54.0f;
