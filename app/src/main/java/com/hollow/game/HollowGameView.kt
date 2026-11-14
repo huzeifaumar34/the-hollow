@@ -52,7 +52,7 @@ class HollowGameView(context: Context) : View(context) {
         textAlign = Paint.Align.CENTER
         typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD)
     }
-    private val platforms = listOf(
+    private var platforms = listOf(
         Platform(0f, 430f, 690f),
         Platform(770f, 430f, 1160f),
         Platform(1245f, 390f, 1585f),
@@ -166,11 +166,50 @@ class HollowGameView(context: Context) : View(context) {
         crateOnPlate = snapshot[14] > 0.5f
         chapterIndex = snapshot[15].toInt().coerceIn(0, 4)
         hazards = when (chapterIndex) {
-            1 -> floatArrayOf(850f, 1080f, 1430f, 2370f)
+            1 -> floatArrayOf(850f, 980f, 1380f, 2370f)
             2 -> floatArrayOf(930f, 1110f, 1515f, 2450f)
-            3 -> floatArrayOf(820f, 1010f, 1460f, 2300f)
-            4 -> floatArrayOf(890f, 1085f, 1510f, 2490f)
+            3 -> floatArrayOf(820f, 910f, 1210f, 2300f)
+            4 -> floatArrayOf(600f, 740f, 1430f, 2490f)
             else -> floatArrayOf(900f, 1040f, 1500f, 2385f)
+        }
+        platforms = when (chapterIndex) {
+            1 -> listOf(
+                Platform(0f, 430f, 560f),
+                Platform(640f, 400f, 1050f),
+                Platform(1140f, 430f, 1510f),
+                Platform(1600f, 430f, 2180f),
+                Platform(2260f, 430f, 2820f)
+            )
+            2 -> listOf(
+                Platform(0f, 430f, 760f),
+                Platform(850f, 390f, 1230f),
+                Platform(1320f, 430f, 1590f),
+                Platform(1660f, 430f, 2180f),
+                Platform(2260f, 430f, 2820f)
+            )
+            3 -> listOf(
+                Platform(0f, 430f, 520f),
+                Platform(610f, 390f, 980f),
+                Platform(1070f, 430f, 1420f),
+                Platform(1510f, 390f, 1600f),
+                Platform(1660f, 430f, 2180f),
+                Platform(2260f, 430f, 2820f)
+            )
+            4 -> listOf(
+                Platform(0f, 430f, 450f),
+                Platform(540f, 370f, 820f),
+                Platform(900f, 430f, 1220f),
+                Platform(1300f, 370f, 1585f),
+                Platform(1660f, 430f, 2180f),
+                Platform(2260f, 430f, 2820f)
+            )
+            else -> listOf(
+                Platform(0f, 430f, 690f),
+                Platform(770f, 430f, 1160f),
+                Platform(1245f, 390f, 1585f),
+                Platform(1660f, 430f, 2180f),
+                Platform(2260f, 430f, 2820f)
+            )
         }
 
         val mask = snapshot[12].toInt()
@@ -412,7 +451,7 @@ class HollowGameView(context: Context) : View(context) {
         val treePositions = floatArrayOf(150f, 360f, 610f, 820f, 1120f, 1430f, 1780f, 2040f, 2460f, 2620f)
         for (i in treePositions.indices) {
             val x = treePositions[i]
-            val baseY = if (x > 1200f && x < 1600f) 390f else 430f
+            val baseY = platforms.firstOrNull { x >= it.left && x < it.right }?.top ?: 430f
             paint.color = Color.rgb(8, 9, 11)
             paint.strokeWidth = 7f
             canvas.drawLine(x, baseY, x - 10f, baseY - 105f, paint)
@@ -424,7 +463,7 @@ class HollowGameView(context: Context) : View(context) {
 
     private fun drawHazards(canvas: Canvas) {
         for (x in hazards) {
-            val baseY = if (x >= 1245f && x < 1585f) 390f else 430f
+            val baseY = platforms.firstOrNull { x >= it.left && x < it.right }?.top ?: 430f
             val tipY = baseY - 40f
             val path = Path().apply {
                 moveTo(x, baseY)
