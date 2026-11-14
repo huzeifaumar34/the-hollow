@@ -10,7 +10,8 @@ enum class GameState : int {
     Menu = 0,
     Playing = 1,
     Dead = 2,
-    Complete = 3
+    Complete = 3,
+    ChapterComplete = 4
 };
 
 struct Platform {
@@ -35,6 +36,7 @@ struct Snapshot {
     float collected_mask = 0.0f;
     float crate_x = 1720.0f;
     float crate_on_plate = 0.0f;
+    float chapter_index = 0.0f;
 };
 
 class GameCore {
@@ -45,7 +47,8 @@ public:
     void set_input(bool left, bool right, bool jump);
     void update(float delta_seconds);
     void restart(bool from_complete);
-    void restore_progress(float checkpoint_x, int collected_mask, bool switch_active, float crate_x, int deaths);
+    void next_chapter();
+    void restore_progress(float checkpoint_x, int collected_mask, bool switch_active, float crate_x, int deaths, int chapter_index);
     Snapshot snapshot() const;
 
 #ifdef HOLLOW_TESTING
@@ -74,6 +77,7 @@ private:
     float enemy_x_ = 1110.0f;
     float crate_x_ = 1720.0f;
     float checkpoint_x_ = 90.0f;
+    int chapter_index_ = 0;
     int deaths_ = 0;
     bool grounded_ = false;
     bool left_ = false;
@@ -83,6 +87,7 @@ private:
     bool switch_active_ = false;
 
     void clear_input();
+    void configure_chapter();
     void die();
     void update_physics(float dt);
     void update_world_objects(float dt);
