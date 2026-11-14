@@ -10,6 +10,7 @@ add_executable(
 )
 
 target_compile_features(hollow_core_tests PRIVATE cxx_std_17)
+target_compile_definitions(hollow_core_tests PRIVATE HOLLOW_TESTING=1)
 target_include_directories(
     hollow_core_tests
     PRIVATE
