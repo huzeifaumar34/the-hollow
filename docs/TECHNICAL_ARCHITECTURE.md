@@ -13,7 +13,7 @@ Kotlin does not decide gameplay outcomes. It reads the native snapshot and draws
 
 ## Native snapshot contract
 
-The JNI snapshot contains 13 floats, in this order:
+The JNI snapshot contains 15 floats, in this order:
 
 | Index | Meaning |
 |---:|---|
@@ -30,6 +30,8 @@ The JNI snapshot contains 13 floats, in this order:
 | 10 | Checkpoint X |
 | 11 | Death count |
 | 12 | Fragment bit mask |
+| 13 | Movable crate X |
+| 14 | Crate positioned on pressure plate (0 or 1) |
 
 The fixed-size snapshot keeps JNI traffic small and avoids passing game objects across the language boundary.
 
@@ -48,4 +50,5 @@ Android builds include `armeabi-v7a`, `arm64-v8a`, and `x86_64`. The 32-bit ARM 
 2. Keep Android-specific APIs out of the native simulation.
 3. Keep rendering separate from collision and state transitions.
 4. Prefer deterministic, testable simulation functions.
-5. Add new level mechanics to the C++ core first, then expose only the presentation data needed by Kotlin.
+5. Persist checkpoint, fragment, switch, crate, and death progress with Android SharedPreferences; restore that data into C++ at startup.
+6. Add new level mechanics to the C++ core first, then expose only the presentation data needed by Kotlin.
