@@ -46,6 +46,7 @@ void GameCore::restart(bool from_complete) {
         collected_.fill(false);
         switch_active_ = false;
         enemy_x_ = 1110.0f;
+        crate_x_ = 1720.0f;
         deaths_ = 0;
     }
 
@@ -72,6 +73,7 @@ void GameCore::update(float delta_seconds) {
 
 void GameCore::update_physics(float dt) {
     const float old_bottom = player_y_ + kPlayerHeight;
+    const float old_player_x = player_x_;
 
     if (left_ && !right_) {
         velocity_x_ = -kMoveSpeed;
@@ -121,8 +123,9 @@ void GameCore::update_physics(float dt) {
     for (float hazard_x : hazards_) {
         const bool overlaps = player_x_ + kPlayerWidth > hazard_x &&
                               player_x_ < hazard_x + 46.0f;
-        if (overlaps && player_y_ + kPlayerHeight > 390.0f &&
-            player_y_ < 450.0f) {
+        const float hazard_top = (hazard_x == 1500.0f) ? 350.0f : 390.0f;
+        if (overlaps && player_y_ + kPlayerHeight > hazard_top &&
+            player_y_ < hazard_top + 60.0f) {
             die();
             return;
         }
@@ -198,6 +201,9 @@ Snapshot GameCore::snapshot() const {
     result.checkpoint_x = checkpoint_x_;
     result.deaths = static_cast<float>(deaths_);
     result.collected_mask = static_cast<float>(mask);
+    result.crate_x = crate_x_;
+    result.crate_on_plate =
+        (crate_x_ + 21.0f >= 1760.0f && crate_x_ + 21.0f <= 1815.0f) ? 1.0f : 0.0f;
     return result;
 }
 
