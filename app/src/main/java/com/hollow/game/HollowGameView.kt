@@ -37,7 +37,7 @@ class HollowGameView(context: Context) : View(context) {
         const val CONTROL_JUMP = 3
     }
 
-    private enum class GameState { MENU, PLAYING, DEAD, COMPLETE }
+    private enum class GameState { MENU, PLAYING, DEAD, COMPLETE, CHAPTER_COMPLETE }
 
     // Simulation and gameplay rules live in the C++ core through JNI.
     private val engine = NativeGameEngine()
@@ -59,7 +59,7 @@ class HollowGameView(context: Context) : View(context) {
         Platform(1660f, 430f, 2180f),
         Platform(2260f, 430f, 2820f)
     )
-    private val hazards = floatArrayOf(900f, 1040f, 1500f, 2385f)
+    private var hazards = floatArrayOf(900f, 1040f, 1500f, 2385f)
     private val shardPositions = floatArrayOf(555f, 1370f, 1905f)
     private val collectedShards = HashSet<Int>()
     private val pointers = HashMap<Int, Int>()
@@ -78,6 +78,7 @@ class HollowGameView(context: Context) : View(context) {
     private var enemyX = 1110f
     private var crateX = 1720f
     private var crateOnPlate = false
+    private var chapterIndex = 0
     private var switchActivated = false
     private var checkpointX = 90f
     private var elapsed = 0f
@@ -92,7 +93,8 @@ class HollowGameView(context: Context) : View(context) {
             collectedMask = savePrefs.getInt("collected_mask", 0),
             switchActive = savePrefs.getBoolean("switch_active", false),
             crateX = savePrefs.getFloat("crate_x", 1720f),
-            deaths = savePrefs.getInt("deaths", 0)
+            deaths = savePrefs.getInt("deaths", 0),
+            chapterIndex = savePrefs.getInt("chapter_index", 0)
         )
         syncNativeSnapshot()
         isFocusable = true
@@ -128,7 +130,12 @@ class HollowGameView(context: Context) : View(context) {
             GameState.MENU -> drawMenu(canvas)
             GameState.PLAYING -> drawHudAndControls(canvas)
             GameState.DEAD -> drawEndOverlay(canvas, "A ESCURIDÃO ALCANÇOU-TE", "TOCA PARA TENTAR NOVAMENTE")
-            GameState.COMPLETE -> drawEndOverlay(canvas, "O PRIMEIRO LIMIAR", "TOCA PARA JOGAR NOVAMENTE")
+            GameState.CHAPTER_COMPLETE -> drawEndOverlay(
+                canvas,
+                "CAPÍTULO CONCLUÍDO",
+                "TOCA PARA CONTINUAR • CAPÍTULO " + (chapterIndex + 2)
+            )
+            GameState.COMPLETE -> drawEndOverlay(canvas, "O FIM DO VAZIO", "TOCA PARA RECOMEÇAR")
         }
         canvas.restore()
         postInvalidateOnAnimation()
@@ -143,7 +150,7 @@ class HollowGameView(context: Context) : View(context) {
 
     private fun syncNativeSnapshot() {
         val snapshot = engine.snapshot()
-        if (snapshot.size < 15) return
+        if (snapshot.size < 16) return
 
         playerX = snapshot[0]
         playerY = snapshot[1]
@@ -157,6 +164,14 @@ class HollowGameView(context: Context) : View(context) {
         deaths = snapshot[11].toInt()
         crateX = snapshot[13]
         crateOnPlate = snapshot[14] > 0.5f
+        chapterIndex = snapshot[15].toInt().coerceIn(0, 4)
+        hazards = when (chapterIndex) {
+            1 -> floatArrayOf(850f, 1080f, 1430f, 2370f)
+            2 -> floatArrayOf(930f, 1110f, 1515f, 2450f)
+            3 -> floatArrayOf(820f, 1010f, 1460f, 2300f)
+            4 -> floatArrayOf(890f, 1085f, 1510f, 2490f)
+            else -> floatArrayOf(900f, 1040f, 1500f, 2385f)
+        }
 
         val mask = snapshot[12].toInt()
         nativeCollectedMask = mask
@@ -169,6 +184,7 @@ class HollowGameView(context: Context) : View(context) {
             1 -> GameState.PLAYING
             2 -> GameState.DEAD
             3 -> GameState.COMPLETE
+            4 -> GameState.CHAPTER_COMPLETE
             else -> GameState.MENU
         }
         saveProgress()
@@ -180,7 +196,8 @@ class HollowGameView(context: Context) : View(context) {
             savePrefs.getInt("collected_mask", 0) == nativeCollectedMask &&
             savePrefs.getBoolean("switch_active", false) == switchActivated &&
             savePrefs.getFloat("crate_x", 1720f) == crateX &&
-            savePrefs.getInt("deaths", 0) == deaths
+            savePrefs.getInt("deaths", 0) == deaths &&
+            savePrefs.getInt("chapter_index", 0) == chapterIndex
         if (!unchanged) {
             savePrefs.edit()
                 .putFloat("checkpoint_x", checkpointX)
@@ -188,6 +205,7 @@ class HollowGameView(context: Context) : View(context) {
                 .putBoolean("switch_active", switchActivated)
                 .putFloat("crate_x", crateX)
                 .putInt("deaths", deaths)
+                .putInt("chapter_index", chapterIndex)
                 .apply()
         }
     }
@@ -209,10 +227,24 @@ class HollowGameView(context: Context) : View(context) {
     }
 
     private fun drawBackground(canvas: Canvas) {
+        val skyTop = when (chapterIndex) {
+            1 -> Color.rgb(38, 34, 33)
+            2 -> Color.rgb(42, 46, 49)
+            3 -> Color.rgb(18, 22, 29)
+            4 -> Color.rgb(24, 18, 35)
+            else -> Color.rgb(31, 34, 39)
+        }
+        val skyBottom = when (chapterIndex) {
+            1 -> Color.rgb(8, 8, 9)
+            2 -> Color.rgb(5, 7, 8)
+            3 -> Color.rgb(3, 5, 9)
+            4 -> Color.rgb(1, 1, 5)
+            else -> Color.rgb(5, 6, 8)
+        }
         paint.shader = LinearGradient(
             0f, 0f, 0f, VIEW_H,
-            Color.rgb(31, 34, 39),
-            Color.rgb(5, 6, 8),
+            skyTop,
+            skyBottom,
             Shader.TileMode.CLAMP
         )
         canvas.drawRect(0f, 0f, VIEW_W, VIEW_H, paint)
@@ -286,7 +318,7 @@ class HollowGameView(context: Context) : View(context) {
             }
         }
 
-        drawDeadTrees(canvas)
+        drawChapterProps(canvas)
         drawHazards(canvas)
         drawShards(canvas)
         drawPressurePlate(canvas)
@@ -294,6 +326,86 @@ class HollowGameView(context: Context) : View(context) {
         drawGate(canvas)
         drawShadow(canvas)
         drawPlayer(canvas)
+    }
+
+    private fun drawChapterProps(canvas: Canvas) {
+        when (chapterIndex) {
+            1 -> drawRuinedCity(canvas)
+            2 -> drawFactory(canvas)
+            3 -> drawCavern(canvas)
+            4 -> drawVoidMonoliths(canvas)
+            else -> drawDeadTrees(canvas)
+        }
+    }
+
+    private fun drawRuinedCity(canvas: Canvas) {
+        val positions = floatArrayOf(120f, 420f, 760f, 1080f, 1360f, 1760f, 2070f, 2440f, 2660f)
+        for (i in positions.indices) {
+            val x = positions[i]
+            val height = 105f + (i % 3) * 37f
+            val width = 92f + (i % 2) * 25f
+            paint.color = Color.rgb(7, 8, 10)
+            canvas.drawRect(x, 430f - height, x + width, 430f, paint)
+            paint.color = Color.rgb(44, 48, 53)
+            for (row in 0..3) {
+                for (col in 0..2) {
+                    val wx = x + 14f + col * 23f
+                    val wy = 430f - height + 18f + row * 24f
+                    if (wy < 420f) canvas.drawRect(wx, wy, wx + 7f, wy + 10f, paint)
+                }
+            }
+        }
+    }
+
+    private fun drawFactory(canvas: Canvas) {
+        val chimneys = floatArrayOf(220f, 690f, 1190f, 1580f, 2050f, 2510f)
+        for (i in chimneys.indices) {
+            val x = chimneys[i]
+            val h = 120f + (i % 3) * 45f
+            paint.color = Color.rgb(5, 7, 9)
+            canvas.drawRect(x, 430f - h, x + 34f, 430f, paint)
+            canvas.drawRect(x - 6f, 430f - h, x + 40f, 430f - h + 12f, paint)
+            paint.color = Color.argb(45, 190, 196, 202)
+            for (r in 0..2) {
+                val drift = sin(elapsed * 0.7f + i + r) * 7f
+                canvas.drawCircle(x + 18f + drift, 430f - h - 25f - r * 23f, 10f + r * 3f, paint)
+            }
+        }
+        paint.color = Color.rgb(8, 10, 12)
+        canvas.drawRect(0f, 330f, 2820f, 343f, paint)
+        paint.color = Color.rgb(54, 59, 64)
+        for (x in 0..2800 step 180) canvas.drawRect(x.toFloat(), 343f, x + 5f, 430f, paint)
+    }
+
+    private fun drawCavern(canvas: Canvas) {
+        paint.color = Color.rgb(5, 6, 9)
+        for (x in 80..2780 step 170) {
+            val length = 50f + (x % 4) * 16f
+            val stalactite = Path().apply {
+                moveTo(x.toFloat(), 0f)
+                lineTo(x + 28f, 0f)
+                lineTo(x + 14f, length)
+                close()
+            }
+            canvas.drawPath(stalactite, paint)
+            canvas.drawRect(x + 4f, 405f, x + 23f, 430f, paint)
+        }
+        paint.color = Color.rgb(25, 28, 34)
+        for (x in 300..2600 step 560) {
+            canvas.drawRect(x.toFloat(), 0f, x + 8f, 430f, paint)
+        }
+    }
+
+    private fun drawVoidMonoliths(canvas: Canvas) {
+        val positions = floatArrayOf(170f, 560f, 990f, 1450f, 1880f, 2320f, 2640f)
+        for (i in positions.indices) {
+            val x = positions[i]
+            val height = 150f + (i % 3) * 55f
+            paint.color = Color.rgb(2, 2, 5)
+            canvas.drawRect(x, 430f - height, x + 30f, 430f, paint)
+            paint.color = Color.argb(55, 180, 185, 205)
+            canvas.drawLine(x + 15f, 430f - height + 15f, x + 15f, 420f, paint)
+        }
     }
 
     private fun drawDeadTrees(canvas: Canvas) {
@@ -312,7 +424,7 @@ class HollowGameView(context: Context) : View(context) {
 
     private fun drawHazards(canvas: Canvas) {
         for (x in hazards) {
-            val baseY = if (x == 1500f) 390f else 430f
+            val baseY = if (x >= 1245f && x < 1585f) 390f else 430f
             val tipY = baseY - 40f
             val path = Path().apply {
                 moveTo(x, baseY)
@@ -421,6 +533,10 @@ class HollowGameView(context: Context) : View(context) {
         textPaint.textSize = 17f
         textPaint.color = Color.argb(210, 235, 238, 240)
         canvas.drawText("THE HOLLOW", 28f, 36f, textPaint)
+        textPaint.textSize = 12f
+        textPaint.color = Color.rgb(182, 187, 192)
+        val chapterTitles = arrayOf("A FLORESTA MORTA", "AS RUÍNAS", "A FÁBRICA", "O SUBSOLO", "O VAZIO")
+        canvas.drawText("CAPÍTULO " + (chapterIndex + 1) + " — " + chapterTitles[chapterIndex], 180f, 36f, textPaint)
         textPaint.textSize = 13f
         textPaint.color = Color.rgb(160, 166, 171)
         canvas.drawText("FRAGMENTOS: " + collectedShards.size + " / 3", 29f, 58f, textPaint)
@@ -518,6 +634,12 @@ class HollowGameView(context: Context) : View(context) {
             engine.start()
             syncNativeSnapshot()
             state = GameState.PLAYING
+            lastFrameNanos = 0L
+            return true
+        }
+        if (state == GameState.CHAPTER_COMPLETE && action == MotionEvent.ACTION_DOWN) {
+            engine.nextChapter()
+            syncNativeSnapshot()
             lastFrameNanos = 0L
             return true
         }
