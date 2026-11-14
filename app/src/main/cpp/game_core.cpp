@@ -12,7 +12,19 @@ GameCore::GameCore()
           {1245.0f, 390.0f, 1585.0f},
           {1660.0f, 430.0f, 2180.0f},
           {2260.0f, 430.0f, kWorldEnd},
-      } {}
+      } {
+    configure_chapter();
+}
+
+void GameCore::configure_chapter() {
+    switch (chapter_index_) {
+        case 0: hazards_ = {{900.0f, 1040.0f, 1500.0f, 2385.0f}}; break;
+        case 1: hazards_ = {{850.0f, 1080.0f, 1430.0f, 2370.0f}}; break;
+        case 2: hazards_ = {{930.0f, 1110.0f, 1515.0f, 2450.0f}}; break;
+        case 3: hazards_ = {{820.0f, 1010.0f, 1460.0f, 2300.0f}}; break;
+        default: hazards_ = {{890.0f, 1085.0f, 1510.0f, 2490.0f}}; break;
+    }
+}
 
 void GameCore::start() {
     if (state_ == GameState::Menu) {
@@ -42,12 +54,14 @@ void GameCore::die() {
 
 void GameCore::restart(bool from_complete) {
     if (from_complete) {
+        chapter_index_ = 0;
         checkpoint_x_ = 90.0f;
         collected_.fill(false);
         switch_active_ = false;
         enemy_x_ = 1110.0f;
         crate_x_ = 1720.0f;
         deaths_ = 0;
+        configure_chapter();
     }
 
     player_x_ = checkpoint_x_;
@@ -61,29 +75,23 @@ void GameCore::restart(bool from_complete) {
     clear_input();
 }
 
-void GameCore::restore_progress(
-    float checkpoint_x,
-    int collected_mask,
-    bool switch_active,
-    float crate_x,
-    int deaths
-) {
-    checkpoint_x_ = (checkpoint_x >= 1200.0f) ? 1270.0f : 90.0f;
-    crate_x_ = std::clamp(crate_x, 1720.0f, 2070.0f);
-    switch_active_ = switch_active;
-    deaths_ = std::max(0, deaths);
+void GameCore::next_chapter() {
+    if (state_ != GameState::ChapterComplete || chapter_index_ >= 4) return;
 
-    for (int i = 0; i < static_cast<int>(collected_.size()); ++i) {
-        collected_[static_cast<std::size_t>(i)] = (collected_mask & (1 << i)) != 0;
-    }
-
-    player_x_ = checkpoint_x_;
-    player_y_ = checkpoint_x_ > 1000.0f ? 336.0f : 365.0f;
+    ++chapter_index_;
+    checkpoint_x_ = 90.0f;
+    player_x_ = 90.0f;
+    player_y_ = 365.0f;
     velocity_x_ = 0.0f;
     velocity_y_ = 0.0f;
+    camera_x_ = 0.0f;
+    enemy_x_ = 1110.0f;
+    crate_x_ = 1720.0f;
+    switch_active_ = false;
+    collected_.fill(false);
     grounded_ = false;
-    camera_x_ = std::clamp(player_x_ - 330.0f, 0.0f, 1900.0f);
-    enemy_x_ = std::max(1110.0f, checkpoint_x_ - 160.0f);
+    state_ = GameState::Playing;
+    configure_chapter();
     clear_input();
 }
 
@@ -163,7 +171,8 @@ void GameCore::update_physics(float dt) {
     for (float hazard_x : hazards_) {
         const bool overlaps = player_x_ + kPlayerWidth > hazard_x &&
                               player_x_ < hazard_x + 46.0f;
-        const float hazard_top = (hazard_x == 1500.0f) ? 350.0f : 390.0f;
+        const float hazard_top =
+            (hazard_x >= 1245.0f && hazard_x < 1585.0f) ? 350.0f : 390.0f;
         if (overlaps && player_y_ + kPlayerHeight > hazard_top &&
             player_y_ < hazard_top + 60.0f) {
             die();
@@ -181,7 +190,7 @@ void GameCore::update_physics(float dt) {
     }
 
     if (player_x_ > 2680.0f) {
-        state_ = GameState::Complete;
+        state_ = chapter_index_ < 4 ? GameState::ChapterComplete : GameState::Complete;
         clear_input();
     }
 
@@ -254,6 +263,7 @@ Snapshot GameCore::snapshot() const {
     result.crate_x = crate_x_;
     result.crate_on_plate =
         (crate_x_ + 21.0f >= 1760.0f && crate_x_ + 21.0f <= 1815.0f) ? 1.0f : 0.0f;
+    result.chapter_index = static_cast<float>(chapter_index_);
     return result;
 }
 
