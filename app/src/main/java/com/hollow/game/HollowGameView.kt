@@ -41,6 +41,8 @@ class HollowGameView(context: Context) : View(context) {
 
     // Simulation and gameplay rules live in the C++ core through JNI.
     private val engine = NativeGameEngine()
+    private val savePrefs = context.getSharedPreferences("the_hollow_save", Context.MODE_PRIVATE)
+    private var nativeCollectedMask = 0
 
     private data class Platform(val left: Float, val top: Float, val right: Float)
 
@@ -85,6 +87,14 @@ class HollowGameView(context: Context) : View(context) {
     private var screenScaleY = 1f
 
     init {
+        engine.restoreProgress(
+            checkpointX = savePrefs.getFloat("checkpoint_x", 90f),
+            collectedMask = savePrefs.getInt("collected_mask", 0),
+            switchActive = savePrefs.getBoolean("switch_active", false),
+            crateX = savePrefs.getFloat("crate_x", 1720f),
+            deaths = savePrefs.getInt("deaths", 0)
+        )
+        syncNativeSnapshot()
         isFocusable = true
         isClickable = true
         setLayerType(View.LAYER_TYPE_SOFTWARE, null)
@@ -149,6 +159,7 @@ class HollowGameView(context: Context) : View(context) {
         crateOnPlate = snapshot[14] > 0.5f
 
         val mask = snapshot[12].toInt()
+        nativeCollectedMask = mask
         collectedShards.clear()
         for (i in 0 until 3) {
             if ((mask and (1 shl i)) != 0) collectedShards.add(i)
@@ -159,6 +170,25 @@ class HollowGameView(context: Context) : View(context) {
             2 -> GameState.DEAD
             3 -> GameState.COMPLETE
             else -> GameState.MENU
+        }
+        saveProgress()
+    }
+
+    private fun saveProgress() {
+        val unchanged =
+            savePrefs.getFloat("checkpoint_x", 90f) == checkpointX &&
+            savePrefs.getInt("collected_mask", 0) == nativeCollectedMask &&
+            savePrefs.getBoolean("switch_active", false) == switchActivated &&
+            savePrefs.getFloat("crate_x", 1720f) == crateX &&
+            savePrefs.getInt("deaths", 0) == deaths
+        if (!unchanged) {
+            savePrefs.edit()
+                .putFloat("checkpoint_x", checkpointX)
+                .putInt("collected_mask", nativeCollectedMask)
+                .putBoolean("switch_active", switchActivated)
+                .putFloat("crate_x", crateX)
+                .putInt("deaths", deaths)
+                .apply()
         }
     }
 
@@ -477,6 +507,7 @@ class HollowGameView(context: Context) : View(context) {
 
     override fun onDetachedFromWindow() {
         clearControls()
+        saveProgress()
         engine.close()
         super.onDetachedFromWindow()
     }
