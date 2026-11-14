@@ -43,7 +43,7 @@ class NativeGameEngine {
     }
 
     fun snapshot(): FloatArray {
-        return if (handle != 0L) nativeSnapshot(handle) else FloatArray(13)
+        return if (handle != 0L) nativeSnapshot(handle) else FloatArray(15)
     }
 
     fun close() {
