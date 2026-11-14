@@ -221,6 +221,16 @@ int GameCore::collected_count() const {
     return count;
 }
 
+#ifdef HOLLOW_TESTING
+void GameCore::debug_set_player(float x, float y, bool grounded) {
+    player_x_ = x;
+    player_y_ = y;
+    grounded_ = grounded;
+    velocity_x_ = 0.0f;
+    velocity_y_ = 0.0f;
+}
+#endif
+
 Snapshot GameCore::snapshot() const {
     int mask = 0;
     for (int i = 0; i < static_cast<int>(collected_.size()); ++i) {
