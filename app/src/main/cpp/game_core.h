@@ -88,6 +88,7 @@ private:
 
     void clear_input();
     void configure_chapter();
+    float platform_top_at(float x) const;
     void die();
     void update_physics(float dt);
     void update_world_objects(float dt);
