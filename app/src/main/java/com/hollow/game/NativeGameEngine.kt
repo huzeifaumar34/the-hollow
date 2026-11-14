@@ -24,13 +24,15 @@ class NativeGameEngine {
     )
     private external fun nativeUpdate(handle: Long, deltaSeconds: Float)
     private external fun nativeRestart(handle: Long, fromComplete: Boolean)
+    private external fun nativeNextChapter(handle: Long)
     private external fun nativeRestoreProgress(
         handle: Long,
         checkpointX: Float,
         collectedMask: Int,
         switchActive: Boolean,
         crateX: Float,
-        deaths: Int
+        deaths: Int,
+        chapterIndex: Int
     )
     private external fun nativeSnapshot(handle: Long): FloatArray
 
@@ -50,22 +52,27 @@ class NativeGameEngine {
         if (handle != 0L) nativeRestart(handle, fromComplete)
     }
 
+    fun nextChapter() {
+        if (handle != 0L) nativeNextChapter(handle)
+    }
+
     fun restoreProgress(
         checkpointX: Float,
         collectedMask: Int,
         switchActive: Boolean,
         crateX: Float,
-        deaths: Int
+        deaths: Int,
+        chapterIndex: Int
     ) {
         if (handle != 0L) {
             nativeRestoreProgress(
-                handle, checkpointX, collectedMask, switchActive, crateX, deaths
+                handle, checkpointX, collectedMask, switchActive, crateX, deaths, chapterIndex
             )
         }
     }
 
     fun snapshot(): FloatArray {
-        return if (handle != 0L) nativeSnapshot(handle) else FloatArray(15)
+        return if (handle != 0L) nativeSnapshot(handle) else FloatArray(16)
     }
 
     fun close() {
