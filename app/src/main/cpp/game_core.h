@@ -33,6 +33,8 @@ struct Snapshot {
     float checkpoint_x = 90.0f;
     float deaths = 0.0f;
     float collected_mask = 0.0f;
+    float crate_x = 1720.0f;
+    float crate_on_plate = 0.0f;
 };
 
 class GameCore {
@@ -65,6 +67,7 @@ private:
     float velocity_y_ = 0.0f;
     float camera_x_ = 0.0f;
     float enemy_x_ = 1110.0f;
+    float crate_x_ = 1720.0f;
     float checkpoint_x_ = 90.0f;
     int deaths_ = 0;
     bool grounded_ = false;
