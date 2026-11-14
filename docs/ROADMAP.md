@@ -7,19 +7,21 @@
 - [x] C++17 gameplay core built with Android NDK and CMake
 - [x] JNI bridge with compact native state snapshots
 - [x] Platforms, gaps, spikes, gravity and landing collision
+- [x] Chapter-specific platform geometry, heights and hazard layouts
+- [x] Chapter-specific checkpoint positions and respawn heights
 - [x] Three collectible fragments per chapter
 - [x] Pushable crate and pressure-plate gate puzzle
 - [x] Pursuing shadow enemy
-- [x] Checkpoint and death/retry loop
+- [x] Death/retry loop and checkpoint
 - [x] Save and restore chapter, checkpoint, fragments, puzzle state and death count
 - [x] Five-chapter campaign state machine and chapter transitions
-- [x] Per-chapter atmosphere and hazard layouts
-- [x] Host-side C++ tests for movement, jump, pickups, spike collision, crate puzzle, save restore and campaign progression
+- [x] Five distinct visual themes
+- [x] Host-side C++ tests for movement, jump, pickups, spike collision, crate puzzle, save restore, chapter checkpoints and campaign progression
 - [x] GitHub Actions workflow: native tests first, then multi-ABI debug APK
 
-## Milestone 0.4 — Distinct level design
+## Milestone 0.4 — Distinct puzzle design
 
-- [ ] Give each chapter bespoke platform geometry and puzzle sequences
+- [ ] Give every chapter its own main puzzle sequence and environmental rules
 - [ ] Add moving platforms, lifts and timed machinery
 - [ ] Add chapter-specific enemy behaviours and encounters
 - [ ] Add hidden routes and optional memory fragments

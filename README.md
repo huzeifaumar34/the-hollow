@@ -14,18 +14,18 @@ An original monochrome 2D atmospheric puzzle-platformer for Android.
 
 ### Implemented
 
-- A monochrome 2D platformer with a silhouette protagonist
+- Monochrome 2D platformer with a silhouette protagonist
 - Native C++ simulation for movement, gravity, collision and hazards
-- Touch controls for left/right movement and jumping
-- Five-chapter campaign framework: forest, ruins, factory, underground and the void
-- Chapter-specific atmosphere and hazard layouts
+- Touch movement and jump controls
+- Five chapters: forest, ruins, factory, underground and the void
+- Chapter-specific platform geometry, platform heights and hazard layouts
+- Checkpoints positioned for each chapter's platform geometry
 - Pushable crate and pressure-plate gate puzzle
-- Three collectible fragments per chapter
-- Pursuing shadow, death/retry and checkpoint
-- Local progress saving for chapter, checkpoint, fragments, crate puzzle and deaths
-- Host-side C++ tests for movement, jumping, collectibles, hazards, puzzle activation, save restore and chapter progression
+- Collectible fragments and a pursuing shadow
+- Death/retry loop and local progress saving
+- C++ tests for movement, jump, fragments, hazards, crate activation, save restore, checkpoints and chapter transitions
 
-The current chapter framework has five themed stages and transitions. Each stage still needs its own bespoke level geometry, puzzles, environmental art, sound and narrative polish.
+The five-chapter campaign framework and first-pass routes are implemented. Each chapter still needs bespoke puzzle sequences, polished original artwork, audio and narrative content; this is not yet the finished game.
 
 ## Controls
 
@@ -73,8 +73,8 @@ docs/
 
 ## Roadmap
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for the current implementation status and next milestones.
+See [docs/ROADMAP.md](docs/ROADMAP.md) for implementation status and next milestones.
 
 ## Creative direction
 
-THE HOLLOW is an original project. It takes broad inspiration from the quiet tension and environmental storytelling of monochrome puzzle-platformers, but uses its own characters, puzzles, levels, artwork, and sound.
+THE HOLLOW is an original project. It takes broad inspiration from the quiet tension and environmental storytelling of monochrome puzzle-platformers, but uses its own characters, puzzles, levels, artwork and sound.

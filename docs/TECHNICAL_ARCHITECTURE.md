@@ -5,7 +5,7 @@
 The application uses a native-first gameplay architecture:
 
 - **Kotlin / Android:** Activity lifecycle, touch input, screen scaling, Canvas rendering, local save storage and Android integration.
-- **C++17 / Android NDK:** authoritative simulation state, movement, gravity, collision detection, hazards, enemy pressure, crate puzzle, collectibles, checkpoints, chapter progression and level completion.
+- **C++17 / Android NDK:** authoritative simulation state, movement, gravity, collision detection, chapter platform geometry, hazards, enemy pressure, crate puzzle, collectibles, checkpoints, campaign progression and level completion.
 - **JNI:** a narrow bridge that sends touch state and frame delta to C++, then returns a compact snapshot to the renderer.
 - **CMake:** builds the shared native library `libhollow.so`.
 
@@ -34,11 +34,11 @@ The JNI snapshot contains 16 floats, in this order:
 | 14 | Crate positioned on pressure plate (0 or 1) |
 | 15 | Chapter index (0–4) |
 
-The fixed-size snapshot keeps JNI traffic small and avoids passing game objects across the language boundary.
+The fixed-size snapshot keeps JNI traffic small and avoids passing game objects across the language boundary. The chapter's platform and hazard tables are deterministic C++ data selected by chapter index.
 
-## Campaign
+## Campaign and level geometry
 
-The C++ campaign state machine currently contains five chapters:
+The C++ campaign state machine contains five chapters:
 
 1. The Dead Forest
 2. The Ruins
@@ -46,7 +46,7 @@ The C++ campaign state machine currently contains five chapters:
 4. The Underground
 5. The Void
 
-Each chapter has its own hazard layout and visual theme. Chapter geometry and puzzle sequences are still being expanded; the five-stage framework is not yet a finished five-level game.
+Each chapter has its own platform segments, platform heights, hazard positions and visual theme. The checkpoint X and respawn height are selected to match that chapter's geometry. The current build still reuses the crate/pressure-plate interaction and shadow behaviour across chapters; chapter-exclusive puzzle sequences and enemy patterns remain future work.
 
 ## Persistence
 
