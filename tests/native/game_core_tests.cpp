@@ -66,10 +66,10 @@ void test_restart_from_checkpoint() {
 
 void test_progress_restore() {
     hollow::GameCore game;
-    game.restore_progress(1270.0f, 5, true, 1780.0f, 4, 2);
+    game.restore_progress(1400.0f, 5, true, 1780.0f, 4, 2);
     const auto restored = game.snapshot();
-    assert(std::abs(restored.checkpoint_x - 1270.0f) < 0.01f);
-    assert(std::abs(restored.player_x - 1270.0f) < 0.01f);
+    assert(std::abs(restored.checkpoint_x - 1400.0f) < 0.01f);
+    assert(std::abs(restored.player_x - 1400.0f) < 0.01f);
     assert(restored.collected_count == 2.0f);
     assert(restored.switch_active > 0.5f);
     assert(std::abs(restored.crate_x - 1780.0f) < 0.01f);
@@ -124,6 +124,29 @@ void test_five_chapter_campaign() {
     assert(final.chapter_index == 4.0f);
 }
 
+void test_chapter_checkpoints_match_platform_heights() {
+    const float expected_x[5] = {1270.0f, 1180.0f, 1400.0f, 1200.0f, 1420.0f};
+    const float expected_y[5] = {336.0f, 376.0f, 376.0f, 376.0f, 316.0f};
+
+    hollow::GameCore game;
+    game.start();
+    for (int chapter = 0; chapter < 5; ++chapter) {
+        game.debug_set_player(1700.0f, 376.0f, true);
+        tick(game, 1, 1.0f / 60.0f);
+        game.restart(false);
+        const auto respawn = game.snapshot();
+        assert(std::abs(respawn.checkpoint_x - expected_x[chapter]) < 0.01f);
+        assert(std::abs(respawn.player_x - expected_x[chapter]) < 0.01f);
+        assert(std::abs(respawn.player_y - expected_y[chapter]) < 0.01f);
+
+        if (chapter < 4) {
+            game.debug_set_player(2681.0f, 376.0f, true);
+            tick(game, 1, 1.0f / 60.0f);
+            game.next_chapter();
+        }
+    }
+}
+
 } // namespace
 
 int main() {
@@ -136,6 +159,7 @@ int main() {
     test_box_activates_pressure_plate();
     test_factory_spike_kills_player();
     test_five_chapter_campaign();
+    test_chapter_checkpoints_match_platform_heights();
     std::cout << "THE HOLLOW native core tests passed\n";
     return 0;
 }
